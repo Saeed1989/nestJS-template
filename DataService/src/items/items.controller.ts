@@ -11,6 +11,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ItemsService } from './items.service';
 import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
@@ -22,6 +23,7 @@ import { LoggingInterceptor } from '../common/interceptors/logging.interceptor';
 import { TimeoutInterceptor } from '../common/interceptors/timeout.interceptor';
 import { ValidatedUser } from '../auth-client/token-validator.interface';
 
+@ApiTags('items')
 @Controller('items')
 @UseInterceptors(LoggingInterceptor, TimeoutInterceptor)
 export class ItemsController {
@@ -40,12 +42,14 @@ export class ItemsController {
   }
 
   @Post()
+  @ApiBearerAuth()
   @UseGuards(RemoteJwtAuthGuard)
   create(@Body() createItemDto: CreateItemDto, @CurrentUser() user: ValidatedUser) {
     return this.itemsService.create(createItemDto, user);
   }
 
   @Patch(':id')
+  @ApiBearerAuth()
   @UseGuards(RemoteJwtAuthGuard)
   update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -56,6 +60,7 @@ export class ItemsController {
   }
 
   @Delete(':id')
+  @ApiBearerAuth()
   @UseGuards(RemoteJwtAuthGuard)
   remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: ValidatedUser) {
     return this.itemsService.remove(id, user);

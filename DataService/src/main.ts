@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
@@ -19,9 +20,19 @@ async function bootstrap() {
     new PrismaExceptionFilter(),
   );
 
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Data Service')
+    .setDescription('Items CRUD API')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, document);
+
   const port = process.env.PORT || 3000;
   await app.listen(port);
   console.log(`Data service listening on port ${port}`);
+  console.log(`Swagger UI at http://localhost:${port}/docs`);
 }
 
 bootstrap();

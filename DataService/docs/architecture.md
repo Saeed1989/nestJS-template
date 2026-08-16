@@ -49,3 +49,10 @@
   first run
 - npm run db:setup wraps it; safe to re-run any time, never errors on a
   second run
+
+
+  ## Dev tooling
+- Swagger/OpenAPI at /docs, via @nestjs/swagger + the Nest CLI plugin
+  (no manual @ApiProperty() on DTOs — the plugin infers from TS types)
+- All protected routes get @ApiBearerAuth(); DocumentBuilder configured with
+  addBearerAuth()
