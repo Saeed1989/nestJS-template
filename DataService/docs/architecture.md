@@ -41,3 +41,11 @@
 
 ## Config
 - Env validation class — fails fast at boot if required env vars are missing
+
+## Local DB bootstrap
+- scripts/setup-db.ts — idempotent script that creates the Postgres role and
+  database from DATABASE_URL if they don't already exist, connecting via a
+  separate POSTGRES_ADMIN_URL since the target role won't exist yet on a
+  first run
+- npm run db:setup wraps it; safe to re-run any time, never errors on a
+  second run
