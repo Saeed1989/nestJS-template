@@ -44,6 +44,7 @@ and point it at this service's URL.
   become useless the moment tokenVersion is bumped
 - /auth/validate is read-only — no writes, it's on the hot path for every
   other service's protected requests
+  
 
   ## Dev tooling
 - Swagger/OpenAPI at /docs, via @nestjs/swagger + the Nest CLI plugin
