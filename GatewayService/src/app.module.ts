@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { validate } from './config/env.validation';
 import { HealthModule } from './health/health.module';
+import { DocsModule } from './docs/docs.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { HealthModule } from './health/health.module';
       },
     ]),
     HealthModule,
+    DocsModule,
   ],
   providers: [
     {
