@@ -1,0 +1,37 @@
+ Demo UI               Gateway              Auth & Config                   Data Service
+
+    | POST /auth/login    |                       |                               |
+    |-------------------->|                       |                               |
+    |                     |                       |                               |
+    |                     | POST /auth/login      |                               |
+    |                     |---------------------->|                               |
+    |                     |                       |                               |
+    |                     | 200 access+refresh tokens                             |
+    |                     |<..................... |                               |
+    |                     |                       |                               |
+    | 200 access+refresh tokens                   |                               |
+    |<................... |                       |                               |
+    |                     |                       |                               |
+    | (store accessToken in memory)               |                               |
+    |                     |                       |                               |
+    | GET /items  Bearer <token>                  |                               |
+    |-------------------->|                       |                               |
+    |                     |                       |                               |
+    |                     | GET /items  Bearer <token>                            |
+    |                     |------------------------------------------------------>|
+    |                     |                       |                               |
+    |                     |                       | POST /auth/validate {token}   |
+    |                     |                       |<----------------------------- |
+    |                     |                       |                               |
+    |                     |                       | 200 {valid:true,user}         |
+    |                     |                       |..............................>|
+    |                     |                       |                               |
+    |                     |                       |                       (now trusted as this user)
+    |                     |                       |                               |
+    |                     | 200 [items]           |                               |
+    |                     |<..................................................... |
+    |                     |                       |                               |
+    | 200 [items]         |                       |                               |
+    |<................... |                       |                               |
+    |                     |                       |                               |
+    | (render item list)  |                       |                               |
