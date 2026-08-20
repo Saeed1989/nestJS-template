@@ -1,0 +1,542 @@
+SOFTWARE REQUIREMENTS SPECIFICATION
+
+Project:  NestJS Microservices Template
+Version:  1.0
+Date:     August 20, 2026
+Status:   Draft
+
+
+TABLE OF CONTENTS
+
+1. Introduction
+   1.1 Purpose
+   1.2 Scope
+   1.3 Definitions and Abbreviations
+   1.4 References
+2. Overall Description
+   2.1 Product Perspective
+   2.2 Product Functions
+   2.3 User Classes and Characteristics
+   2.4 Operating Environment
+   2.5 Design and Implementation Constraints
+   2.6 Assumptions and Dependencies
+3. System Architecture
+   3.1 Service Inventory
+   3.2 Data Ownership Boundaries
+   3.3 Authentication and Authorization Model
+4. Specific Requirements
+   4.1 Auth & Config Service
+   4.2 Data Service
+   4.3 API Gateway
+   4.4 Demo UI
+5. External Interface Requirements
+   5.1 Auth & Config Service API
+   5.2 Data Service API
+   5.3 Gateway API Surface
+6. Non-Functional Requirements
+   6.1 Security
+   6.2 Performance
+   6.3 Reliability and Availability
+   6.4 Scalability
+   6.5 Maintainability
+   6.6 Portability
+7. Data Requirements
+   7.1 User Entity
+   7.2 Setting Entity
+   7.3 Item Entity
+8. Environment Configuration Reference
+9. Out of Scope / Future Considerations
+10. Appendix: Glossary
+
+
+================================================================================
+1. INTRODUCTION
+================================================================================
+
+1.1 Purpose
+
+This document specifies the functional and non-functional requirements for
+the NestJS Microservices Template, a reference system demonstrating a
+service-oriented backend architecture with a minimal frontend consumer. It
+is intended for use by developers extending the system, and by AI coding
+assistants (e.g. Claude Code) operating against the per-service CLAUDE.md
+and docs/architecture.md files that accompany each service's own repository.
+
+1.2 Scope
+
+The system consists of four independently deployable projects, each in its
+own repository:
+
+  - auth-config   Authentication, authorization, and centralized app config
+  - data-service  A CRUD API for the system's core domain resource ("items")
+  - gateway       The single public entry point; reverse-proxies to the two
+                   services above
+  - demo-ui       A minimal Next.js client for manually exercising the login
+                   and read-data flows
+
+This document covers all four. It does not cover deployment infrastructure
+(container orchestration, CI/CD pipelines) or any production-hardening work
+not already described in the per-service CLAUDE.md files.
+
+1.3 Definitions and Abbreviations
+
+  SRS        Software Requirements Specification
+  JWT        JSON Web Token
+  RBAC       Role-Based Access Control
+  CRUD       Create, Read, Update, Delete
+  DTO        Data Transfer Object
+  FR         Functional Requirement
+  NFR        Non-Functional Requirement
+  Gateway    The API gateway service (this document's "gateway")
+  Tenant     Not implemented in this system; discussed only as a future
+             consideration (see Section 9)
+
+1.4 References
+
+  - NestJS documentation (docs.nestjs.com)
+  - Prisma documentation (prisma.io/docs)
+  - Per-service CLAUDE.md and docs/architecture.md files (source of truth
+    for implementation-level detail; this SRS is the requirements-level
+    summary of the same system)
+
+
+================================================================================
+2. OVERALL DESCRIPTION
+================================================================================
+
+2.1 Product Perspective
+
+The system is a self-contained reference architecture, not a component of
+a larger existing system. It was designed incrementally, service by service,
+with each service's requirements captured independently before
+implementation. The Gateway is the only service intended to be reachable
+from outside the private network; Auth & Config and Data Service are
+internal-only in any real deployment.
+
+2.2 Product Functions
+
+At a high level, the system SHALL provide:
+
+  - User registration and authentication via JWT (access + refresh tokens)
+  - Role-based authorization (user / admin)
+  - A centralized key-value application configuration store
+  - CRUD operations on a core domain resource ("items"), with
+    ownership-based access control
+  - A single public entry point that routes client traffic to the
+    appropriate internal service
+  - A minimal web client demonstrating the login and data-read flows
+
+2.3 User Classes and Characteristics
+
+  - End user (authenticated):     can manage their own items; can read
+                                    config; cannot write config
+  - Administrator:                 all end-user capabilities, plus config
+                                    writes and the ability to modify or
+                                    delete any user's items
+  - Anonymous / unauthenticated:   can read the item list and individual
+                                    items (read-only public access); cannot
+                                    write anything
+  - Other internal services:       call Auth & Config's token-validation
+                                    endpoint; not a human user class, but a
+                                    distinct caller with its own contract
+
+2.4 Operating Environment
+
+  - Node.js 20+
+  - PostgreSQL, installed natively on the host (no containerization
+    assumed; Docker is explicitly not a dependency of this system)
+  - Each backend service runs as an independent process on its own port
+  - Target development platform: Windows, verified working without WSL or
+    Docker Desktop
+
+2.5 Design and Implementation Constraints
+
+  - Services communicate over plain REST/HTTP; no message broker is used
+  - Each service owns an isolated PostgreSQL database; no service queries
+    another service's database directly
+  - The Gateway holds no database and no business logic; it is a reverse
+    proxy plus cross-cutting concerns only (CORS, rate limiting, security
+    headers)
+  - The Demo UI holds no server-side session; the access token exists only
+    in browser memory (React state), never in a cookie or localStorage
+  - Data Service does not decode JWTs locally; it verifies tokens by
+    calling Auth & Config's validation endpoint over HTTP
+
+2.6 Assumptions and Dependencies
+
+  - A single local PostgreSQL instance can serve multiple databases (one
+    per backend service) for development purposes
+  - Auth & Config must be running and reachable before Data Service can
+    successfully validate any token
+  - The Gateway must be running and reachable before the Demo UI can
+    perform any authenticated action
+
+
+================================================================================
+3. SYSTEM ARCHITECTURE
+================================================================================
+
+3.1 Service Inventory
+
+  Service        Port   Responsibility                      Depends on
+  -----------    ----   --------------------------------    -----------------
+  data-service   3000   /items CRUD                          Postgres (data_db),
+                                                               auth-config
+  auth-config    3001   Auth, RBAC, /config store             Postgres
+                                                               (auth_config_db)
+  gateway        3002   Public entry point, reverse proxy     auth-config,
+                                                               data-service
+  demo-ui        3003   Login + read-only item list (web UI)  gateway only
+
+3.2 Data Ownership Boundaries
+
+Each backend service owns exactly one PostgreSQL database, accessed only by
+that service:
+
+  - auth_config_db: owned exclusively by auth-config. Contains User and
+    Setting tables.
+  - data_db: owned exclusively by data-service. Contains the Item table.
+
+No service is permitted to connect directly to another service's database.
+Cross-service data access, where needed, occurs only via each service's
+public REST API.
+
+3.3 Authentication and Authorization Model
+
+  - Auth & Config issues two signed JWTs on successful login or
+    registration: a short-lived access token and a longer-lived refresh
+    token, signed with separate secrets.
+  - Every other service that needs to authorize a request calls Auth &
+    Config's token-validation endpoint over HTTP rather than decoding the
+    JWT itself. This centralizes revocation logic in one place, at the
+    cost of one additional network hop per protected request.
+  - A per-user tokenVersion counter allows all outstanding refresh tokens
+    for a user to be invalidated at once (e.g. for a "log out everywhere"
+    capability), by incrementing the counter and having validation reject
+    any token whose embedded version no longer matches.
+  - Authorization beyond "is this token valid" is ownership-based for
+    domain resources (a user may modify only their own items) and
+    role-based for administrative actions (config writes, modifying or
+    deleting another user's items).
+
+
+================================================================================
+4. SPECIFIC REQUIREMENTS
+================================================================================
+
+4.1 Auth & Config Service
+
+  FR-AUTH-01  The system SHALL allow a new user to register with an email,
+              password, and optional display name. The password SHALL be
+              hashed before storage; it SHALL NOT be stored or returned in
+              plaintext under any circumstance.
+
+  FR-AUTH-02  The system SHALL reject registration if the given email is
+              already associated with an existing account.
+
+  FR-AUTH-03  The system SHALL allow a registered user to log in with email
+              and password, returning a signed access token and a signed
+              refresh token on success.
+
+  FR-AUTH-04  The system SHALL allow a client to exchange a valid, non-
+              revoked refresh token for a new access/refresh token pair,
+              without requiring the user to re-enter credentials.
+
+  FR-AUTH-05  The system SHALL reject a refresh token whose embedded token
+              version does not match the user's current token version.
+
+  FR-AUTH-06  The system SHALL expose an internal endpoint that accepts an
+              access token and returns whether it is valid, and if so, the
+              associated user's id, email, and roles. This endpoint SHALL
+              be callable by other internal services and SHALL involve no
+              write operations.
+
+  FR-AUTH-07  The system SHALL allow an authenticated user to retrieve
+              their own profile (id, email, roles).
+
+  FR-AUTH-08  The system SHALL allow any authenticated user to read
+              application configuration entries (key, value, description).
+
+  FR-AUTH-09  The system SHALL restrict creation, modification, and
+              deletion of configuration entries to users holding the
+              admin role.
+
+  FR-AUTH-10  The system SHALL assign every new user a default role of
+              "user"; the roles field SHALL support multiple simultaneous
+              roles per user.
+
+4.2 Data Service
+
+  FR-DATA-01  The system SHALL allow any client, authenticated or not, to
+              retrieve the full list of items.
+
+  FR-DATA-02  The system SHALL allow any client, authenticated or not, to
+              retrieve a single item by id.
+
+  FR-DATA-03  The system SHALL require a valid access token to create a
+              new item. The created item SHALL be associated with the
+              authenticated user as its owner.
+
+  FR-DATA-04  The system SHALL require a valid access token to modify or
+              delete an item, and SHALL permit the operation only if the
+              requester is the item's owner or holds the admin role.
+              Requests failing this check SHALL be rejected.
+
+  FR-DATA-05  The system SHALL validate access tokens by calling Auth &
+              Config's token-validation endpoint over HTTP for every
+              protected request. It SHALL NOT decode or verify JWT
+              signatures locally.
+
+  FR-DATA-06  If Auth & Config is unreachable or times out, the system
+              SHALL reject the protected request (fail closed) rather than
+              allowing it to proceed unauthenticated.
+
+  FR-DATA-07  The outbound call to Auth & Config's validation endpoint
+              SHALL be bounded by a timeout, so that an unresponsive
+              dependency does not indefinitely block the client's request.
+
+4.3 API Gateway
+
+  FR-GW-01    The system SHALL forward all requests under /auth and
+              /config to the Auth & Config service unmodified.
+
+  FR-GW-02    The system SHALL forward all requests under /items to the
+              Data Service unmodified.
+
+  FR-GW-03    The system SHALL apply rate limiting to all incoming
+              requests.
+
+  FR-GW-04    The system SHALL apply standard security headers and
+              permit cross-origin requests.
+
+  FR-GW-05    The system SHALL expose a health-check endpoint reflecting
+              only the Gateway process's own status, not the status of
+              downstream services.
+
+  FR-GW-06    The system SHALL contain no business logic, no database
+              connection, and no independent authentication or
+              authorization logic; all such logic resides in the
+              downstream services.
+
+  FR-GW-07    The system SHALL expose a single aggregated API
+              documentation UI that merges the OpenAPI documents published
+              by Auth & Config and Data Service, grouped by originating
+              service.
+
+  FR-GW-08    If a downstream service's OpenAPI document cannot be
+              retrieved at startup, the aggregated documentation SHALL
+              omit that service's section rather than failing to start.
+              This degradation applies only to the documentation feature;
+              it SHALL NOT affect live request proxying.
+
+4.4 Demo UI
+
+  FR-UI-01    The system SHALL present a login form accepting email and
+              password, submitting to the Gateway's login endpoint.
+
+  FR-UI-02    On successful login, the system SHALL retain the returned
+              access token in memory for the duration of the browser
+              session, and SHALL NOT persist it to any browser storage
+              mechanism.
+
+  FR-UI-03    On successful login, the system SHALL retrieve and display
+              the list of items via the Gateway.
+
+  FR-UI-04    On login failure, the system SHALL display the error
+              returned by the API rather than failing silently.
+
+  FR-UI-05    The system SHALL communicate only with the Gateway; it
+              SHALL NOT call Auth & Config or Data Service directly.
+
+  The following are explicitly out of scope for the Demo UI by design, not
+  by omission: user registration, creating/updating/deleting items, an
+  explicit logout control (session-clearing on page refresh is considered
+  sufficient), and any data persistence across browser refreshes.
+
+
+================================================================================
+5. EXTERNAL INTERFACE REQUIREMENTS
+================================================================================
+
+5.1 Auth & Config Service API (internal base: http://localhost:3001)
+
+  POST   /auth/register     public
+  POST   /auth/login        public
+  POST   /auth/refresh      public (valid refresh token required)
+  POST   /auth/validate     internal only (called by other services)
+  GET    /auth/me           authenticated
+  GET    /config            authenticated
+  GET    /config/:key       authenticated
+  POST   /config            admin only
+  PATCH  /config/:key       admin only
+  DELETE /config/:key       admin only
+
+5.2 Data Service API (internal base: http://localhost:3000)
+
+  GET    /items              public
+  GET    /items/:id          public
+  POST   /items              authenticated
+  PATCH  /items/:id          owner or admin
+  DELETE /items/:id          owner or admin
+
+5.3 Gateway API Surface (public base: http://localhost:3002)
+
+The Gateway exposes the same paths listed in 5.1 and 5.2 unmodified via
+reverse proxy, plus:
+
+  GET    /health              gateway process status only
+  GET    /docs                aggregated API documentation UI
+
+
+================================================================================
+6. NON-FUNCTIONAL REQUIREMENTS
+================================================================================
+
+6.1 Security
+
+  NFR-SEC-01  Passwords SHALL be hashed using a salted, adaptive hashing
+              algorithm (bcrypt) before storage.
+  NFR-SEC-02  Access tokens and refresh tokens SHALL be signed with
+              distinct secrets, so that compromise of one does not
+              compromise the other.
+  NFR-SEC-03  Access tokens SHALL have a short expiry (target: 15 minutes)
+              to limit the exposure window of a leaked token.
+  NFR-SEC-04  Environment files containing secrets or credentials SHALL be
+              excluded from version control.
+  NFR-SEC-05  Only the Gateway SHALL be reachable from outside the private
+              network in a production-style deployment.
+
+6.2 Performance
+
+  NFR-PERF-01 The additional latency introduced by remote token validation
+              (Data Service to Auth & Config) SHALL be bounded by an
+              explicit timeout rather than left unbounded.
+
+6.3 Reliability and Availability
+
+  NFR-REL-01  Protected operations SHALL fail closed when a required
+              dependency (e.g. Auth & Config, for token validation) is
+              unreachable.
+  NFR-REL-02  A failure in the Gateway's documentation-aggregation feature
+              SHALL NOT affect its request-proxying availability.
+
+6.4 Scalability
+
+  NFR-SCALE-01 All backend services SHALL be stateless (no in-memory
+               session or sticky state tied to a specific instance), so
+               that any service may be horizontally scaled by running
+               additional instances behind the Gateway without
+               coordination.
+
+6.5 Maintainability
+
+  NFR-MAINT-01 Each service SHALL be maintained as an independent
+               repository with its own dependency set, so that services
+               may be versioned, deployed, and modified independently of
+               one another.
+  NFR-MAINT-02 Each service SHALL document its own module structure and
+               conventions (CLAUDE.md / docs/architecture.md) sufficient
+               for a new contributor, human or AI-assisted, to extend it
+               consistently.
+
+6.6 Portability
+
+  NFR-PORT-01  All services SHALL run on Windows, macOS, and Linux without
+               requiring Docker or any container runtime.
+  NFR-PORT-02  Local database bootstrap (role and database creation) SHALL
+               be automated via a cross-platform script rather than
+               requiring manual, OS-specific database administration
+               commands for day-to-day setup.
+
+
+================================================================================
+7. DATA REQUIREMENTS
+================================================================================
+
+7.1 User Entity (owned by auth-config)
+
+  id             unique identifier
+  email          unique, required
+  passwordHash   required, never exposed via any API response
+  name           optional
+  roles          array of strings, default ["user"]
+  tokenVersion   integer, default 0, incremented to invalidate outstanding
+                 refresh tokens
+  createdAt / updatedAt
+
+7.2 Setting Entity (owned by auth-config)
+
+  id             unique identifier
+  key            unique, required
+  value          required
+  description    optional
+  updatedAt
+
+7.3 Item Entity (owned by data-service)
+
+  id             unique identifier
+  title          required
+  description    optional
+  ownerId        required; references the User id of the creator (no
+                 foreign-key relationship across service boundaries --
+                 enforced at the application layer, not the database
+                 layer, since the two entities live in separate databases)
+  createdAt / updatedAt
+
+
+================================================================================
+8. ENVIRONMENT CONFIGURATION REFERENCE
+================================================================================
+
+  auth-config:
+    DATABASE_URL, POSTGRES_ADMIN_URL, JWT_ACCESS_SECRET,
+    JWT_REFRESH_SECRET, JWT_ACCESS_EXPIRES_IN, JWT_REFRESH_EXPIRES_IN, PORT
+
+  data-service:
+    DATABASE_URL, POSTGRES_ADMIN_URL, AUTH_MODE (mock | remote),
+    AUTH_SERVICE_URL, PORT
+
+  gateway:
+    PORT, AUTH_SERVICE_URL, DATA_SERVICE_URL
+
+  demo-ui:
+    none required; the Gateway base URL is fixed in application code for
+    this demo's scope
+
+
+================================================================================
+9. OUT OF SCOPE / FUTURE CONSIDERATIONS
+================================================================================
+
+The following were discussed during architecture planning but are
+explicitly NOT part of the current requirements or implementation. They
+are recorded here so future scope decisions are made deliberately rather
+than by accident:
+
+  - Webhook fan-out (notifying external systems on data changes)
+  - Blue-green deployment and instant rollback at the Gateway
+  - Multi-tenant routing (per-tenant service instances or versions)
+  - Request/response transformation for legacy client compatibility
+  - API monetization / usage metering
+  - GraphQL bridging
+  - User registration, write operations, and persistent sessions in the
+    Demo UI
+
+Should any of these move into scope, they require their own requirements
+addendum to this document before implementation begins.
+
+
+================================================================================
+10. APPENDIX: GLOSSARY
+================================================================================
+
+  Access token     Short-lived JWT proving identity on each request
+  Refresh token     Longer-lived JWT used only to obtain a new access token
+  Fail closed       Reject a request when a security-relevant dependency is
+                    unavailable, rather than allowing it through
+  Ownership-based
+  authorization     Access control decided by comparing the resource's
+                    owner to the requester, not solely by role
+  Reverse proxy     A server that forwards client requests to one of
+                    several backend services, without executing business
+                    logic itself
