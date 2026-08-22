@@ -3,15 +3,16 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { DataList } from "@/components/data-list";
 
-export default function Home() {
+export default function ItemsPage() {
   const { token, hydrated } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!hydrated) return;
-    router.replace(token ? "/items" : "/login");
+    if (hydrated && !token) router.replace("/login");
   }, [hydrated, token, router]);
 
-  return null;
+  if (!hydrated || !token) return null;
+  return <DataList />;
 }

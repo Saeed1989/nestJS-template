@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api";
 
@@ -23,8 +24,13 @@ export function DataList() {
   return (
     <ul className="flex flex-col gap-2 max-w-sm mx-auto mt-16">
       {items.map((item) => (
-        <li key={item.id} className="border rounded px-3 py-2">
-          {JSON.stringify(item)}
+        <li key={item.id}>
+          <Link
+            href={`/items/${item.id}`}
+            className="block border rounded px-3 py-2 hover:bg-gray-50"
+          >
+            {JSON.stringify(item)}
+          </Link>
         </li>
       ))}
     </ul>

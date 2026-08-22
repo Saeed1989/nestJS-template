@@ -3,15 +3,16 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { LoginForm } from "@/components/login-form";
 
-export default function Home() {
+export default function LoginPage() {
   const { token, hydrated } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!hydrated) return;
-    router.replace(token ? "/items" : "/login");
+    if (hydrated && token) router.replace("/items");
   }, [hydrated, token, router]);
 
-  return null;
+  if (!hydrated || token) return null;
+  return <LoginForm />;
 }
