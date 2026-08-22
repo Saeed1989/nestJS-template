@@ -3,14 +3,16 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { DataList } from "@/components/data-list";
 
-export default function Home() {
+export default function ItemsPage() {
   const { token } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    router.replace(token ? "/items" : "/login");
+    if (!token) router.replace("/login");
   }, [token, router]);
 
-  return null;
+  if (!token) return null;
+  return <DataList />;
 }

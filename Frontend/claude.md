@@ -6,8 +6,11 @@ Not a production frontend — no design system beyond Tailwind utilities, no pol
 beyond "can I log in and see data."
 
 ## Scope — exactly this, nothing more
-- Login form → POST /auth/login on the gateway → store the returned accessToken
-- On successful login, GET /items on the gateway → render as a plain list
+- Login form on /login → POST /auth/login on the gateway → store the returned
+  accessToken → redirect to /items
+- /items → GET /items on the gateway → render as a plain list; redirects to
+  /login if there's no in-memory token (e.g. after a refresh)
+- / redirects to /login or /items depending on whether a token is held
 - No register, no create/update/delete, no explicit logout button (refreshing
   the page already clears the in-memory token, same effect)
 
@@ -25,7 +28,10 @@ server-side session to use.
 ## Folder structure
 app/
   layout.tsx       — root layout, wraps children in AuthProvider
-  page.tsx         — 'use client', renders LoginForm or DataList based on auth state
+  page.tsx         — 'use client', redirects to /login or /items based on auth state
+  login/page.tsx   — 'use client', renders LoginForm; redirects to /items if already
+                      authed
+  items/page.tsx   — 'use client', renders DataList; redirects to /login if no token
   globals.css      — Tailwind directives
 lib/
   auth-context.tsx — React Context: { token, user }, login()/logout()
@@ -45,8 +51,8 @@ components/
 
 ## Don'ts
 - Don't persist the token to localStorage — in-memory only, losing it on
-  refresh is fine for a demo
-- Don't add routing beyond the single page
+  refresh is fine for a demo (it just bounces you from /items back to /login)
+- Don't add routing beyond /, /login, and /items
 - Don't add register, create, update, delete, or a logout button — login +
   read-only list is the entire scope
 - Don't fetch data in a Server Component or Route Handler
