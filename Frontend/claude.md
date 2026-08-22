@@ -16,11 +16,12 @@ beyond "can I log in and see data."
 
 ## Rendering approach (deliberate trade-off, not an oversight)
 This app is Client Component only. Next.js's main strength is Server Components
-fetching data server-side, but the access token only ever exists in the browser
-(in-memory, no cookie) — a Server Component has no way to attach it to a request.
-Every component that touches auth state or calls the API must be 'use client'.
-Don't move data fetching to a Server Component or a Route Handler — there's no
-server-side session to use.
+fetching data server-side, but the access token is held in React state, only
+mirrored into a plain (non-httpOnly) session cookie so a reload can rehydrate
+it — it's never read server-side, so a Server Component still has no way to
+attach it to a request. Every component that touches auth state or calls the
+API must be 'use client'. Don't move data fetching to a Server Component or a
+Route Handler — there's no server-side session to use.
 
 ## Talks to
 - The gateway only, at http://localhost:3002 — never auth-config or data directly.
@@ -34,7 +35,9 @@ app/
   items/page.tsx   — 'use client', renders DataList; redirects to /login if no token
   globals.css      — Tailwind directives
 lib/
-  auth-context.tsx — React Context: { token, user }, login()/logout()
+  auth-context.tsx — React Context: { token, user, hydrated }, login()/logout();
+                      mirrors the token into a session cookie (cleared when the
+                      browser closes) and rehydrates from it on mount
   api.ts           — fetch wrapper, base URL = gateway, attaches Bearer token
 components/
   login-form.tsx
@@ -50,8 +53,9 @@ components/
   data, auth-config, and gateway
 
 ## Don'ts
-- Don't persist the token to localStorage — in-memory only, losing it on
-  refresh is fine for a demo (it just bounces you from /items back to /login)
+- Don't persist the token to localStorage — it's mirrored to a session cookie
+  only (cleared when the browser closes, not on a plain reload) and read back
+  via `hydrated` in AuthProvider, not localStorage
 - Don't add routing beyond /, /login, and /items
 - Don't add register, create, update, delete, or a logout button — login +
   read-only list is the entire scope

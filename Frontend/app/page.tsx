@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 
 export default function Home() {
-  const { token } = useAuth();
+  const { token, hydrated } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
+    if (!hydrated) return;
     router.replace(token ? "/items" : "/login");
-  }, [token, router]);
+  }, [hydrated, token, router]);
 
   return null;
 }

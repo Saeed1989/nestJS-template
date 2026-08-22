@@ -6,13 +6,13 @@ import { useAuth } from "@/lib/auth-context";
 import { DataList } from "@/components/data-list";
 
 export default function ItemsPage() {
-  const { token } = useAuth();
+  const { token, hydrated } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!token) router.replace("/login");
-  }, [token, router]);
+    if (hydrated && !token) router.replace("/login");
+  }, [hydrated, token, router]);
 
-  if (!token) return null;
+  if (!hydrated || !token) return null;
   return <DataList />;
 }
