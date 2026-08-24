@@ -1,22 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
-import { decryptSession, SESSION_COOKIE_NAME } from "./lib/crypto";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { SESSION_COOKIE_NAME, decryptSession } from "@/lib/crypto";
 
-export const config = {
-  matcher: ["/admin/:path*"],
-};
-
-// Presence-and-decryptability check only. It stops unauthenticated browsers
-// from loading the shell — it cannot and does not verify admin authorization,
-// which auth-config re-checks on every API call regardless.
+// Presence/decryptability check only — this cannot verify the session
+// belongs to an admin, only that a well-formed session exists. Every admin
+// action is re-authorized by auth-config on every request regardless.
 export async function proxy(request: NextRequest) {
   const raw = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   const session = raw ? await decryptSession(raw) : null;
 
   if (!session) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("from", request.nextUrl.pathname);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   return NextResponse.next();
 }
+
+export const config = {
+  matcher: "/admin/:path*",
+};

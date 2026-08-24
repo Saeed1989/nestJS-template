@@ -1,21 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { fetchJson, UpstreamError } from "@/lib/upstream";
+import { loadIdentity } from "@/lib/identity";
 import { LogoutButton } from "./_components/logout-button";
-
-type Identity = { id: string; email: string; roles: string[] };
-
-async function loadIdentity(): Promise<Identity | null> {
-  try {
-    return await fetchJson<Identity>("/auth/me");
-  } catch (err) {
-    if (err instanceof UpstreamError && err.statusCode === 401) {
-      redirect("/login");
-    }
-    // Non-auth failure (e.g. gateway hiccup) — still render the shell.
-    return null;
-  }
-}
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const identity = await loadIdentity();
@@ -28,6 +13,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <span className="text-base font-semibold text-slate-900">Admin Portal</span>
             <Link href="/admin" className="text-sm font-medium text-slate-600 hover:text-slate-900">
               Dashboard
+            </Link>
+            <Link href="/admin/users" className="text-sm font-medium text-slate-600 hover:text-slate-900">
+              Users
+            </Link>
+            <Link href="/admin/audit" className="text-sm font-medium text-slate-600 hover:text-slate-900">
+              Audit log
             </Link>
           </nav>
           <div className="flex items-center gap-4">

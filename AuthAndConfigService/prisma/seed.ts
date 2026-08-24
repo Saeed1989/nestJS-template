@@ -28,7 +28,7 @@ async function main(): Promise<void> {
         email: ADMIN_EMAIL,
         passwordHash,
         name: 'Admin',
-        roles: ['admin'],
+        roles: ['super_admin'],
       },
     });
     console.log(`✓ Created admin user : ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`);

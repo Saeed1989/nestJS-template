@@ -19,7 +19,7 @@ async function bootstrap() {
 
   app.use(
     createProxyMiddleware({
-      pathFilter: ['/auth', '/config'],
+      pathFilter: ['/auth', '/config', '/admin'],
       target: authServiceUrl,
       changeOrigin: true,
     }),
@@ -46,7 +46,7 @@ async function bootstrap() {
   const port = process.env.PORT || 3002;
   await app.listen(port);
   console.log(`Gateway service listening on port ${port}`);
-  console.log(`Proxying /auth, /config -> ${authServiceUrl}`);
+  console.log(`Proxying /auth, /config, /admin -> ${authServiceUrl}`);
   console.log(`Proxying /items -> ${dataServiceUrl}`);
 }
 
