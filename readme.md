@@ -1,9 +1,9 @@
 # NestJS microservices template
 
-A small system of four independently deployable projects, each with its own
-repo, its own CLAUDE.md, and its own detailed README. This file is the map
-that ties them together — for setup specifics on any one service, see its
-own README.
+A small system of five independently deployable projects, each with its own
+repo and its own CLAUDE.md (all but admin-ui also have their own detailed
+README — admin-ui's is still outstanding). This file is the map that ties
+them together — for setup specifics on any one service, see its own README.
 
 ## Architecture
 
@@ -11,12 +11,15 @@ own README.
 |---|---|---|---|
 | auth-config | 3001 | Auth (JWT), RBAC, /config store | Postgres (auth_config_db) |
 | data-service | 3000 | /items CRUD | Postgres (data_db), auth-config (token validation) |
-| gateway | 3002 | Public entry point, reverse-proxies to the two above | auth-config, data-service |
+| gateway | 3002 | Public entry point, reverse-proxies to the three below | auth-config, data-service |
 | demo-ui | 3003 | Next.js UI: login + read-only item list | gateway only |
+| admin-ui | 3004 | Next.js admin portal: list/create users, edit roles, deactivate/reactivate, audit log | gateway only |
 
 Only the gateway is meant to be public-facing. Everything else — including
-the demo UI in a real deployment — talks to the gateway, never directly to
-auth-config or data-service.
+the demo UI and the admin portal in a real deployment — talks to the
+gateway, never directly to auth-config or data-service. admin-ui has no
+database of its own; all user data lives in `auth_config_db` and is reached
+only through auth-config's `AdminModule`.
 
 ## Prerequisites
 
@@ -35,6 +38,7 @@ to show anything real.
 3. **data-service**: `npm install`, `npm run db:setup`, `npx prisma migrate dev` — see `data-service/README.md`. Confirm `.env` has `AUTH_MODE=remote` and `AUTH_SERVICE_URL=http://localhost:3001`, not the original `mock` value from early development
 4. **gateway**: `npm install` — no database, nothing to migrate
 5. **demo-ui**: `npm install`
+6. **admin-ui**: `npm install` — no database of its own, nothing to migrate. Seed a `super_admin` user via auth-config's seed command first (see step 2) so there's something to log in with
 
 ## Running everything
 
@@ -52,6 +56,9 @@ cd gateway && npm run start:dev          # :3002
 
 # terminal 4
 cd demo-ui && npm run dev -- -p 3003     # :3003
+
+# terminal 5
+cd admin-ui && npm run dev               # :3004 (already fixed in its own package.json)
 ```
 
 ## Testing the whole system end to end
@@ -70,6 +77,11 @@ If step 4 fails but steps 1–3 work, the gateway's proxy or CORS config is
 the first place to look — everything up to that point never touches the
 gateway.
 
+To check the admin portal: seed auth-config's baseline `super_admin` user
+(its seed command, see step 2 of setup), open `http://localhost:3004`, and
+log in with those credentials. You should land on `/admin` and be able to
+list users, create one, edit its roles, and deactivate/reactivate it.
+
 ## Full port map
 
 | Port | Service |
@@ -78,6 +90,7 @@ gateway.
 | 3001 | auth-config |
 | 3002 | gateway |
 | 3003 | demo-ui |
+| 3004 | admin-ui |
 | 5432 | Postgres |
 
 ## Troubleshooting
@@ -85,6 +98,6 @@ gateway.
 Common issues (`psql` not found, Prisma `P1000` auth errors, the Windows
 query-engine file lock) are covered in each backend service's own README,
 since the fixes are identical regardless of which service hit them. Port
-conflicts between these four are the one issue specific to running them
+conflicts between these five are the one issue specific to running them
 together — the table above is the source of truth if something's binding
 to the wrong port.
