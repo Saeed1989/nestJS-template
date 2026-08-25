@@ -68,6 +68,14 @@ export class AuthService {
     return this.issueTokens(safeUser);
   }
 
+  // Bumps tokenVersion, which invalidates every outstanding refresh token
+  // for this user — the same mechanism used for a forced deactivation. The
+  // still-live access token dies on its own within 15m regardless.
+  async logout(userId: string): Promise<{ ok: true }> {
+    await this.usersService.incrementTokenVersion(userId);
+    return { ok: true };
+  }
+
   async validateAccessToken(token: string) {
     let payload: AccessTokenPayload;
     try {

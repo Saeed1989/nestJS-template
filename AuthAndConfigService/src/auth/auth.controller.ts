@@ -31,6 +31,13 @@ export class AuthController {
     return this.authService.refresh(dto.refreshToken);
   }
 
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  logout(@CurrentUser() user: { id: string }) {
+    return this.authService.logout(user.id);
+  }
+
   @Post('validate')
   validate(@Body() dto: ValidateTokenDto) {
     return this.authService.validateAccessToken(dto.token);
