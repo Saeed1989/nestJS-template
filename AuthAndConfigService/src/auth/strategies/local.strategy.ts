@@ -21,6 +21,10 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (!user.isActive) {
+      throw new UnauthorizedException('This account has been deactivated');
+    }
+
     const { passwordHash: _passwordHash, ...safeUser } = user;
     return safeUser;
   }

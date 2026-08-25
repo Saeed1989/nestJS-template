@@ -9,12 +9,16 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  roles        String[] @default(["user"])
-  tokenVersion Int      @default(0)
+  id                 String   @id @default(uuid())
+  email              String   @unique
+  passwordHash       String
+  name               String
+  roles              String[] @default(["user"])
+  tokenVersion       Int      @default(0)
+  isActive           Boolean  @default(true)
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model Setting {
@@ -22,4 +26,14 @@ model Setting {
   key         String  @unique
   value       String
   description String?
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorId      String
+  action       String
+  targetUserId String
+  changes      Json
+  createdAt    DateTime @default(now())
+  ip           String?
 }
