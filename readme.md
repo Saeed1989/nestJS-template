@@ -1,9 +1,20 @@
 # NestJS microservices template
 
 A small system of five independently deployable projects, each with its own
-repo and its own CLAUDE.md (all but admin-ui also have their own detailed
-README — admin-ui's is still outstanding). This file is the map that ties
-them together — for setup specifics on any one service, see its own README.
+repo, its own CLAUDE.md, and its own detailed README. This file is the map
+that ties them together — for setup specifics on any one service, see its
+own README.
+
+## What it does
+
+- Registers and authenticates users with JWT access/refresh tokens
+- Enforces role-based access control (`user`, `admin`, `super_admin`)
+- CRUD for a simple "item" resource, with per-owner write permissions
+- Centralized app configuration store, readable by anyone, admin-writable
+- A public gateway that proxies every service and rate-limits requests
+- A minimal demo frontend: log in and browse items
+- A full admin portal: list/search users, create accounts, edit roles,
+  deactivate/reactivate users, and review an audit log of every admin action
 
 ## Architecture
 
@@ -38,7 +49,7 @@ to show anything real.
 3. **data-service**: `npm install`, `npm run db:setup`, `npx prisma migrate dev` — see `data-service/README.md`. Confirm `.env` has `AUTH_MODE=remote` and `AUTH_SERVICE_URL=http://localhost:3001`, not the original `mock` value from early development
 4. **gateway**: `npm install` — no database, nothing to migrate
 5. **demo-ui**: `npm install`
-6. **admin-ui**: `npm install` — no database of its own, nothing to migrate. Seed a `super_admin` user via auth-config's seed command first (see step 2) so there's something to log in with
+6. **admin-ui**: `npm install` — no database of its own, nothing to migrate. Seed a `super_admin` user via auth-config's seed command first (see step 2) so there's something to log in with — see `admin-ui/README.md`
 
 ## Running everything
 
