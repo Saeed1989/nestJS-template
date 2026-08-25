@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { ROLES } from "@/lib/roles";
 import type { AdminUser } from "@/lib/types";
+import { useApiFetch } from "@/lib/client-fetch";
 import { Modal } from "./modal";
 
 export function EditRolesDialog({ user, onClose }: { user: AdminUser; onClose: () => void }) {
+  const apiFetch = useApiFetch();
   const [roles, setRoles] = useState<string[]>(user.roles);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -24,7 +26,7 @@ export function EditRolesDialog({ user, onClose }: { user: AdminUser; onClose: (
 
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/users/${user.id}`, {
+      const res = await apiFetch(`/api/users/${user.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roles }),

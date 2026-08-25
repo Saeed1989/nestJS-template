@@ -1,4 +1,5 @@
-import { getSession, setSession, clearSession, type SessionPayload } from "./session";
+import { redirect } from "next/navigation";
+import { getSession, setSession, type SessionPayload } from "./session";
 import { decodeJwtExpiry } from "./crypto";
 
 const SKEW_MS = 60_000;
@@ -57,7 +58,12 @@ async function refreshSession(session: SessionPayload): Promise<SessionPayload> 
   });
 
   if (!res.ok) {
-    await clearSession();
+    // Deliberately not clearing the cookie here: this path runs from both
+    // Route Handlers and Server Component renders (via fetchJson), and
+    // Server Components cannot mutate cookies — doing so throws a Next
+    // runtime error, not an UpstreamError, which broke the 401 handling
+    // above it. An invalid cookie just keeps failing the same way on every
+    // request until it's overwritten by a fresh login.
     throw new UpstreamError(401, "Session expired");
   }
 
@@ -142,4 +148,22 @@ export async function fetchJson<T>(path: string, init: RequestInit = {}): Promis
   const response = await withSession(path, init);
   if (!response.ok) throw new UpstreamError(response.status, await extractMessage(response));
   return response.json() as Promise<T>;
+}
+
+/**
+ * Like fetchJson, but for Server Components rendering behind the /admin
+ * gate: a 401 means the session cookie is invalid or refresh already
+ * failed, so redirect to /login instead of throwing into the render tree.
+ */
+export async function fetchJsonOrRedirect<T>(path: string, init: RequestInit = {}): Promise<T> {
+  try {
+    return await fetchJson<T>(path, init);
+  } catch (err) {
+    if (!(err instanceof UpstreamError) || err.statusCode !== 401) throw err;
+  }
+  // redirect() throws internally — it must be called outside the try/catch
+  // above, or Next treats it as just another caught error instead of a
+  // navigation signal (confirmed: inside the catch, this 500'd instead of
+  // redirecting).
+  redirect("/login");
 }

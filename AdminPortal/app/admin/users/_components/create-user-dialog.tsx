@@ -2,9 +2,11 @@
 
 import { useState, type FormEvent } from "react";
 import { ROLES } from "@/lib/roles";
+import { useApiFetch } from "@/lib/client-fetch";
 import { Modal } from "./modal";
 
 export function CreateUserDialog({ onClose }: { onClose: () => void }) {
+  const apiFetch = useApiFetch();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -29,7 +31,7 @@ export function CreateUserDialog({ onClose }: { onClose: () => void }) {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/users", {
+      const res = await apiFetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, name, password, roles }),
