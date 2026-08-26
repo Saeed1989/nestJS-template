@@ -9,7 +9,7 @@ admin-ui has **no database of its own**. All user data lives in
 by way of the gateway. This README only covers getting a local instance
 running and exercising it end to end. For the session model, the Route
 Handler contract, and the authorization rules, see
-[docs/architecture.md](docs/architecture.md).
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Scope
 
@@ -44,7 +44,7 @@ header, and forwards to the gateway. `proxy.ts` (Next 16's replacement for
 present and decryptable.
 
 Full detail — refresh timing, the 401-retry-once rule, CSRF, cookie
-contents — is in `docs/architecture.md`.
+contents — is in `docs/ARCHITECTURE.md`.
 
 ## Talks to
 
@@ -58,7 +58,7 @@ entry point and carries the rate limiting.
 - auth-config and the gateway running, with auth-config's Postgres
   instance reachable — admin-ui has no database of its own, so there's
   nothing here to migrate or seed. See the top-level
-  [readme.md](../readme.md) for bringing up the whole system.
+  [README.md](../README.md) for bringing up the whole system.
 
 ## First-time setup
 

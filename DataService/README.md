@@ -2,7 +2,7 @@
 
 NestJS 10 REST API with PostgreSQL (via Prisma). One of three services in a larger microservices architecture — gateway, auth-config, and this one.
 
-For internal module structure, guards, interceptors, and naming conventions see [docs/architecture.md](docs/architecture.md).
+For internal module structure, guards, interceptors, and naming conventions see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
