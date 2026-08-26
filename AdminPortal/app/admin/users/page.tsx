@@ -1,4 +1,4 @@
-import { fetchJson } from "@/lib/upstream";
+import { fetchJsonOrRedirect } from "@/lib/upstream";
 import { loadIdentity } from "@/lib/identity";
 import type { AdminUser, ListResponse } from "@/lib/types";
 import { UserTable } from "./_components/user-table";
@@ -6,7 +6,7 @@ import { UserTable } from "./_components/user-table";
 export default async function UsersPage() {
   const [identity, initial] = await Promise.all([
     loadIdentity(),
-    fetchJson<ListResponse<AdminUser>>("/admin/users?page=1&limit=20"),
+    fetchJsonOrRedirect<ListResponse<AdminUser>>("/admin/users?page=1&limit=20"),
   ]);
 
   return (

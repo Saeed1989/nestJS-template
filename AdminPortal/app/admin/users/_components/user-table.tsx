@@ -2,6 +2,7 @@
 
 import { useCallback, useState, type ChangeEvent } from "react";
 import type { AdminUser, ListResponse } from "@/lib/types";
+import { useApiFetch } from "@/lib/client-fetch";
 import { CreateUserDialog } from "./create-user-dialog";
 import { EditRolesDialog } from "./edit-roles-dialog";
 import { DeactivateDialog } from "./deactivate-dialog";
@@ -22,6 +23,7 @@ export function UserTable({
   currentUserId: string;
   currentUserRoles: string[];
 }) {
+  const apiFetch = useApiFetch();
   const [rows, setRows] = useState(initial.data);
   const [meta, setMeta] = useState(initial.meta);
   const [search, setSearch] = useState("");
@@ -40,7 +42,7 @@ export function UserTable({
       if (nextSearch) params.set("search", nextSearch);
       if (nextIncludeInactive) params.set("includeInactive", "true");
 
-      const res = await fetch(`/api/users?${params}`);
+      const res = await apiFetch(`/api/users?${params}`);
       const data = await res.json();
 
       if (!res.ok) {
@@ -55,7 +57,7 @@ export function UserTable({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apiFetch]);
 
   function handleSearchChange(event: ChangeEvent<HTMLInputElement>) {
     const value = event.target.value;

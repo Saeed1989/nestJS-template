@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { fetchJson } from "@/lib/upstream";
+import { fetchJsonOrRedirect } from "@/lib/upstream";
 import type { AuditLogEntry, ListResponse } from "@/lib/types";
 
 export default async function AuditPage({
@@ -10,7 +10,7 @@ export default async function AuditPage({
   const { page: pageParam } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
 
-  const { data: entries, meta } = await fetchJson<ListResponse<AuditLogEntry>>(
+  const { data: entries, meta } = await fetchJsonOrRedirect<ListResponse<AuditLogEntry>>(
     `/admin/audit?page=${page}&limit=20`,
   );
 

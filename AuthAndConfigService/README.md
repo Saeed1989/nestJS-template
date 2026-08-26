@@ -5,7 +5,7 @@ architecture (gateway, auth-config, data). This is the service the others
 call to answer "is this token valid, and who does it belong to."
 
 For internal module structure and the access/refresh token model, see
-[docs/architecture.md](docs/architecture.md). This README only covers
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). This README only covers
 getting a local instance running and exercising it through Swagger.
 
 ## Prerequisites

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AdminUser } from "@/lib/types";
+import { useApiFetch } from "@/lib/client-fetch";
 import { Modal } from "./modal";
 
 export function DeactivateDialog({
@@ -13,6 +14,7 @@ export function DeactivateDialog({
   mode: "deactivate" | "reactivate";
   onClose: () => void;
 }) {
+  const apiFetch = useApiFetch();
   const [confirmText, setConfirmText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -26,7 +28,7 @@ export function DeactivateDialog({
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/users/${user.id}${isDeactivate ? "" : "/reactivate"}`, {
+      const res = await apiFetch(`/api/users/${user.id}${isDeactivate ? "" : "/reactivate"}`, {
         method: isDeactivate ? "DELETE" : "POST",
       });
       const data = await res.json();

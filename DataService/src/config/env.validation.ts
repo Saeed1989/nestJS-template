@@ -19,6 +19,10 @@ class EnvironmentVariables {
   AUTH_MODE: string = 'mock';
 
   @IsOptional()
+  @IsString()
+  AUTH_SERVICE_URL: string = 'http://localhost:3001';
+
+  @IsOptional()
   @IsNumber()
   @Transform(({ value }) => (value ? parseInt(value, 10) : 3000))
   PORT: number = 3000;

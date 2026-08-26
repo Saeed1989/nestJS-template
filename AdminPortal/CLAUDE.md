@@ -112,14 +112,14 @@ individual permission checkboxes.
 
 If this changes to relational permissions later, the guard interface in
 auth-config is designed to absorb it without the UI contract changing shape —
-see `docs/architecture.md`.
+see `docs/ARCHITECTURE.md`.
 
 ## Don'ts
 
 - Don't add a database, an ORM, or Prisma to this repo
 - Don't call data-service or auth-config directly — go through the gateway
 - Don't put authorization logic in Route Handlers or Client Components
-- Don't hard-delete users (see architecture.md on orphaned `Item.ownerId`)
+- Don't hard-delete users (see ARCHITECTURE.md on orphaned `Item.ownerId`)
 - Don't reuse demo-ui's client-only token pattern here
 - Don't create a second password-hashing implementation — auth-config owns it
 - Don't add `/config` management UI to this portal without being asked

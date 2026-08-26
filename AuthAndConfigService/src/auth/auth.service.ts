@@ -68,13 +68,31 @@ export class AuthService {
     return this.issueTokens(safeUser);
   }
 
+  // Bumps tokenVersion, which invalidates every outstanding refresh token
+  // for this user — the same mechanism used for a forced deactivation. The
+  // still-live access token dies on its own within 15m regardless.
+  async logout(userId: string): Promise<{ ok: true }> {
+    await this.usersService.incrementTokenVersion(userId);
+    return { ok: true };
+  }
+
   async validateAccessToken(token: string) {
+    let payload: AccessTokenPayload;
     try {
-      const payload = this.accessJwt.verify<AccessTokenPayload>(token);
-      return { id: payload.sub, email: payload.email, roles: payload.roles };
+      payload = this.accessJwt.verify<AccessTokenPayload>(token);
     } catch {
       throw new UnauthorizedException('Invalid or expired token');
     }
+
+    // Re-read current state from the database rather than trusting the
+    // token's payload — a role change or deactivation must take effect
+    // immediately, not only once the 15m access token expires.
+    const user = await this.usersService.findById(payload.sub);
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Invalid or expired token');
+    }
+
+    return { id: user.id, email: user.email, roles: user.roles };
   }
 
   private issueTokens(user: SafeUser) {

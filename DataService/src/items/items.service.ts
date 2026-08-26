@@ -61,7 +61,7 @@ export class ItemsService {
 
   private assertOwnership(ownerId: string, user: ValidatedUser): void {
     const isOwner = ownerId === user.id;
-    const isAdmin = user.roles.includes('admin');
+    const isAdmin = user.roles.includes('admin') || user.roles.includes('super_admin');
     if (!isOwner && !isAdmin) {
       throw new ForbiddenException('You do not have permission to modify this item');
     }
