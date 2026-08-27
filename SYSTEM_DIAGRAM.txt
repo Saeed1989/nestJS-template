@@ -1,0 +1,175 @@
+================================================================================
+  NESTJS MICROSERVICES TEMPLATE -- SYSTEM DIAGRAM
+================================================================================
+
+                                        +------------------+
+                                        |     Browser      |
+                                        +------------------+
+                          |-----------------------------------------------|
+                          v                                               v
+      +--------------------------------------+        +--------------------------------------+
+      |      demo-ui  (Next.js, :3003)       |        |      admin-ui  (Next.js, :3004)      |
+      |                                      |        |                                      |
+      |       Client Components only.        |        |      Server Components + Route       |
+      |     Access token held in-memory,     |        |     Handlers act as a thin BFF.      |
+      |       mirrored to a plain, JS-       |        |    Session kept in an encrypted,     |
+      |       readable session cookie.       |        |     httpOnly cookie -- the token     |
+      +--------------------------------------+        |      never reaches the browser.      |
+                          |                           +--------------------------------------+
+                          | Bearer <token>, attached                      | Bearer <token>, attached
+                          | client-side                                   | server-side, via proxy.ts
+                          |                                               | + Route Handlers
+                          ------------------------|------------------------
+                                                  v
+                         +------------------------------------------------+
+                         |            gateway  (NestJS, :3002)            |
+                         |                                                |
+                         |         http-proxy-middleware, Helmet,         |
+                         |         rate limiting. No database, no         |
+                         |       auth logic of its own -- the only        |
+                         |             public-facing service.             |
+                         +------------------------------------------------+
+                                                  |
+                /auth /config /admin              |                    /items
+                          |-----------------------------------------------|
+                          v                                               v
+    +------------------------------------------+    +------------------------------------------+
+    |       auth-config  (NestJS, :3001)       |    |      data-service  (NestJS, :3000)       |
+    |                                          |    |                                          |
+    |          - JWT issue + refresh           |    |              - /items CRUD               |
+    |         (access 15m / refresh 7d)        |    |       - ownership check: owner, or       |
+    |      - RBAC: roles[] (user, admin,       |    |          role admin / super_admin        |
+    |                super_admin)              |    |        - AUTH_MODE=remote: calls         |
+    |     - /config store (admin-writable)     |    |     auth-config's POST /auth/validate    |
+    |   - AdminModule: user mgmt + audit log   |    |       (service-to-service, bypassing     |
+    |    - POST /auth/validate re-reads the    |    |        the gateway) on every write       |
+    |      DB, so role/deactivation changes    |    +------------------------------------------+
+    |             apply immediately            |                          |
+    +------------------------------------------+                          |
+                          |                                               |
+                          |                                               |
+                          v                                               v
+      +--------------------------------------+        +--------------------------------------+
+      |      PostgreSQL: auth_config_db      |        |         PostgreSQL: data_db          |
+      |                                      |        |                                      |
+      |       User, AuditLog, Setting        |        |                 Item                 |
+      +--------------------------------------+        +--------------------------------------+
+
+NOTE: data-service -> auth-config also has a direct, service-to-service edge
+not drawn above to keep the picture readable: on every /items write, when
+AUTH_MODE=remote, data-service calls auth-config's POST /auth/validate
+directly at http://localhost:3001 -- bypassing the gateway entirely. This is
+the one cross-service call in the system that does not go through :3002.
+
+================================================================================
+  PORT MAP
+================================================================================
+
+    3000   data-service    /items CRUD
+    3001   auth-config     JWT auth, RBAC, /config, /admin (user mgmt + audit)
+    3002   gateway         reverse proxy, rate limiting -- the only public entry
+    3003   demo-ui         minimal login + read-only/edit item list
+    3004   admin-ui        full admin portal (users, roles, audit log)
+    5432   PostgreSQL      auth_config_db + data_db, one local instance
+
+================================================================================
+  OWNERSHIP -- WHO OWNS WHAT DATA
+================================================================================
+
+    auth_config_db   owned exclusively by auth-config
+                      (User, AuditLog, Setting)
+
+    data_db          owned exclusively by data-service
+                      (Item)
+
+    No service reads another service's database directly. data-service
+    holds a copy of a user's id/email/roles only as long as a single
+    request lasts -- it never persists identity data of its own.
+
+================================================================================
+  REQUEST FLOWS
+================================================================================
+
+  1) demo-ui login
+     Browser -> demo-ui (Client Component)
+             -> POST gateway:3002/auth/login
+             -> auth-config:3001 verifies password, issues {accessToken,
+                refreshToken}
+     demo-ui keeps the accessToken in React state (memory) and mirrors it
+     into a plain, non-httpOnly cookie so a reload can rehydrate it.
+
+  2) admin-ui login
+     Browser -> admin-ui /login (Client Component)
+             -> POST admin-ui:3004/api/auth/login   (same-origin Route Handler)
+             -> POST gateway:3002/auth/login
+             -> auth-config:3001 verifies password, issues tokens
+     admin-ui's Route Handler encrypts {accessToken, refreshToken} into an
+     httpOnly, SameSite=Strict cookie. The token never reaches browser JS.
+     Every subsequent /admin/* page load is gated by proxy.ts, which only
+     checks that this cookie is present and decryptable.
+
+  3) Editing an item (either frontend)
+     -> PATCH gateway:3002/items/:id  (Bearer <accessToken>)
+     -> data-service:3000 loads the item, then (AUTH_MODE=remote) calls
+        auth-config:3001 POST /auth/validate directly with that same token
+     -> auth-config re-reads the user from the DB (not the JWT payload) and
+        returns {id, email, roles} only if the user is still active
+     -> data-service allows the write if requester.id === item.ownerId,
+        or requester.roles includes "admin" or "super_admin"
+
+  4) Deactivating a user (admin-ui only)
+     -> DELETE admin-ui:3004/api/users/:id
+             -> gateway:3002/admin/users/:id
+             -> auth-config:3001 AdminModule: sets isActive=false, bumps
+                tokenVersion, writes an AuditLog row -- all in one
+                transaction
+     Effect is immediate everywhere:
+       - refresh tokens: tokenVersion bump invalidates every outstanding
+         refresh token for that user right away
+       - still-live access tokens: rejected on the next call to
+         /auth/validate (used by data-service) because that endpoint
+         re-reads isActive from the DB every time
+       - the user cannot log in again (local-strategy checks isActive)
+
+  5) Logging out (admin-ui)
+     -> POST admin-ui:3004/api/auth/logout
+             -> gateway:3002/auth/logout
+             -> auth-config:3001 bumps the caller's tokenVersion
+     This revokes every outstanding refresh token for that user, not just
+     the one in the browser's cookie -- "log out everywhere" semantics.
+
+================================================================================
+  KEY ARCHITECTURAL DECISIONS
+================================================================================
+
+  - Only the gateway is public-facing. Every other service trusts that
+    traffic arrived through it (rate limited, headers set by Helmet).
+    data-service's direct call to auth-config is the one deliberate
+    exception, made service-to-service rather than through the gateway.
+
+  - Two frontends, two deliberately different session models:
+      demo-ui   -- token in browser memory + a plain cookie. Acceptable
+                   for a throwaway demo; unacceptable for an admin tool.
+      admin-ui  -- token never leaves the server. Encrypted httpOnly
+                   cookie, Route Handlers as a BFF, CSRF origin checks on
+                   every mutation.
+
+  - Roles are a flat string[] (user, admin, super_admin) stored on User
+    and baked into the access token at login. Anything that needs the
+    token's claims to be trustworthy beyond the 15-minute access-token
+    window (role changes, deactivation) must re-check the database --
+    that's what POST /auth/validate does, and it's the reason
+    AUTH_MODE=remote exists at all.
+
+  - AUTH_MODE=mock (data-service) is a local-dev shortcut only: every
+    request is treated as one hardcoded user regardless of the real
+    token. It makes ownership/role testing meaningless and should be
+    AUTH_MODE=remote whenever you're testing permissions for real.
+
+  - admin-ui has no database of its own. Every piece of user data it
+    shows or edits lives in auth_config_db, reached only through
+    auth-config's AdminModule -- the Route Handlers in admin-ui are
+    intentionally "dumb": read the cookie, attach the bearer token,
+    forward, normalise the error. All business rules (self-modification
+    block, cross-role block, last-super_admin protection, password
+    hashing, audit log writes) live in auth-config.

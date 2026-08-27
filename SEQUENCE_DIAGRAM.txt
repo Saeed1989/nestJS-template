@@ -1,0 +1,182 @@
+================================================================================
+  NESTJS MICROSERVICES TEMPLATE -- SEQUENCE DIAGRAMS
+================================================================================
+
+  Companion to SYSTEM_DIAGRAM.txt, which shows the static structure. This
+  file shows the five flows that matter most, in call order.
+
+  Reading the notation:
+
+      A |---- message ---->| B      A calls B
+      A |<--- response ----| B      B answers A
+        | (something)      |        internal work on that participant's
+        |                  |        own lifeline -- no network hop
+
+  View in a fixed-width font.
+
+  Contents:
+      1. demo-ui login
+      2. admin-ui login
+      3. Editing an item
+      4. Deactivating a user
+      5. Logging out
+
+
+==== 1. demo-ui login ====
+
+ +------------------------------+  +------------------------------+  +------------------------------+  +------------------------------+
+ |           Browser            |  |           demo-ui            |  |           gateway            |  |         auth-config          |
+ +------------------------------+  +------------------------------+  +------------------------------+  +------------------------------+
+                 |                                 |                                 |                                 |
+                 |------- submit login form ------->                                 |                                 |
+                 |                                 |------- POST /auth/login -------->                                 |
+                 |                                 |                                 |------- POST /auth/login -------->
+                 |                                 |                                 |      (verify password (bcrypt)) |
+                 |                                 |                                 |  (sign access(15m)+refresh(7d)) |
+                 |                                 |                                 |<----- 200 {access,refresh} ------
+                 |                                 |<----- 200 {access,refresh} ------                                 |
+                 |                                 | (keep accessToken in React state)                                 |
+                 |                                 | (mirror into a plain JS cookie) |                                 |
+                 |<------- render item list --------                                 |                                 |
+                 |                                 |                                 |                                 |
+
+
+==== 2. admin-ui login ====
+
+ +------------------------------+  +------------------------------+  +------------------------------+  +------------------------------+
+ |           Browser            |  |           admin-ui           |  |           gateway            |  |         auth-config          |
+ +------------------------------+  +------------------------------+  +------------------------------+  +------------------------------+
+                 |                                 |                                 |                                 |
+                 |------- submit login form ------->                                 |                                 |
+                 |                                 | (Route Handler POST /api/auth/login)                              |
+                 |                                 |------- POST /auth/login -------->                                 |
+                 |                                 |                                 |------- POST /auth/login -------->
+                 |                                 |                                 |  (verify password, sign tokens) |
+                 |                                 |                                 |<----- 200 {access,refresh} ------
+                 |                                 |<----- 200 {access,refresh} ------                                 |
+                 |                                 | (encrypt both into one cookie)  |                                 |
+                 |<--- Set-Cookie admin_session ----                                 |                                 |
+                 |                                 |                                 |                                 |
+                 |                                 | (token never sent as browser-visible JSON)                        |
+                 |                                 |                                 |                                 |
+
+
+==== 3. Editing an item ====
+
+ +------------------------------+  +------------------------------+  +------------------------------+  +------------------------------+
+ |           Browser            |  |           gateway            |  |         data-service         |  |         auth-config          |
+ +------------------------------+  +------------------------------+  +------------------------------+  +------------------------------+
+                 |                                 |                                 |                                 |
+                 |--- PATCH /items/:id, Bearer ---->                                 |                                 |
+                 |                                 |--- PATCH /items/:id, Bearer ---->                                 |
+                 |                                 |                                 | (load item by :id)              |
+                 |                                 |                                 |-- POST /auth/validate {token} -->
+                 |                                 |                                 |          (verify JWT signature) |
+                 |                                 |                                 |          (re-read user from DB) |
+                 |                                 |                                 |           (reject if !isActive) |
+                 |                                 |                                 |<----- 200 {id,email,roles} ------
+                 |                                 |                                 | (live roles, not the JWT's stale claim)
+                 |                                 |                                 | (allow: owner, or role admin/super_admin)
+                 |                                 |                                 | (else: 403 Forbidden)           |
+                 |                                 |<------- 200 updated item --------                                 |
+                 |<------- 200 updated item --------                                 |                                 |
+                 |                                 |                                 |                                 |
+
+
+==== 4. Deactivating a user (admin-ui) ====
+
+ +------------------------------+  +------------------------------+  +------------------------------+  +------------------------------+
+ |           Browser            |  |           admin-ui           |  |           gateway            |  |         auth-config          |
+ +------------------------------+  +------------------------------+  +------------------------------+  +------------------------------+
+                 |                                 |                                 |                                 |
+                 |- click Deactivate, type email -->                                 |                                 |
+                 |                                 | (Route Handler DELETE /api/users/:id)                             |
+                 |                                 |---- DELETE /admin/users/:id ---->                                 |
+                 |                                 |                                 |---- DELETE /admin/users/:id ---->
+                 |                                 |                                 |    (actor === target ?  -> 409) |
+                 |                                 |                          (target super_admin, actor not ? -> 403) |
+                 |                                 |                              (target = last super_admin ? -> 409) |
+                 |                                 |                                 |(isActive=false, tokenVersion++) |
+                 |                                 |                               (write AuditLog -- one transaction) |
+                 |                                 |                                 |<------- 200 updated user --------
+                 |                                 |<------- 200 updated user --------                                 |
+                 |<----- row shows Deactivated -----                                 |                                 |
+                 |                                 |                                 |                                 |
+                 |                                 |                                 |          (effect is immediate:) |
+                 |                                 |                         (- refresh tokens die now (tokenVersion)) |
+                 |                                 |                              (- next /auth/validate call rejects) |
+                 |                                 |                               (  the still-live access token too) |
+                 |                                 |                                 |   (- login is blocked outright) |
+                 |                                 |                                 |                                 |
+
+
+==== 5. Logging out (admin-ui) ====
+
+ +------------------------------+  +------------------------------+  +------------------------------+  +------------------------------+
+ |           Browser            |  |           admin-ui           |  |           gateway            |  |         auth-config          |
+ +------------------------------+  +------------------------------+  +------------------------------+  +------------------------------+
+                 |                                 |                                 |                                 |
+                 |-------- click Sign out --------->                                 |                                 |
+                 |                                 | (Route Handler POST /api/auth/logout)                             |
+                 |                                 |------- POST /auth/logout ------->                                 |
+                 |                                 |                                 |------- POST /auth/logout ------->
+                 |                                 |                              (JwtAuthGuard identifies the caller) |
+                 |                                 |                                 |  (tokenVersion++ for that user) |
+                 |                                 |                                 |<--------- 200 {ok:true} ---------
+                 |                                 |<--------- 200 {ok:true} ---------                                 |
+                 |                                 | (clear the local session cookie)|                                 |
+                 |<------ redirect to /login -------                                 |                                 |
+                 |                                 |                                 |                                 |
+                 |                                 |                             (every outstanding refresh token for) |
+                 |                                 |                            (this user is now revoked -- not just) |
+                 |                                 |                               (the one this browser session held) |
+                 |                                 |                                 |                                 |
+
+
+================================================================================
+  WHY THESE FIVE
+================================================================================
+
+  1 vs 2  -- the same credentials, two deliberately different session
+             models. demo-ui ends with the token in browser-reachable
+             JavaScript; admin-ui ends with it encrypted in an httpOnly
+             cookie the browser can send but never read. That single
+             difference is the reason admin-ui needs Route Handlers at
+             all.
+
+  3       -- the only flow where one backend service calls another
+             directly, bypassing the gateway. It is also the flow that
+             makes role changes real: data-service does not trust the
+             JWT's own "roles" claim, it asks auth-config, and
+             auth-config answers from the database.
+
+             With AUTH_MODE=mock this entire validation hop is skipped
+             and every caller is treated as one hardcoded user -- which
+             makes any permission test meaningless. Use AUTH_MODE=remote
+             when testing permissions.
+
+  4 and 5 -- both work by bumping tokenVersion, which is what makes
+             revocation immediate rather than "eventually, once the
+             15-minute access token expires." 4 is revocation done TO a
+             user by an admin; 5 is a user revoking their own sessions.
+             The audit log records the former.
+
+================================================================================
+  WHAT IS NOT DRAWN
+================================================================================
+
+  - Token refresh. admin-ui refreshes server-side inside its upstream
+    helper: if a request 401s, it calls POST /auth/refresh once, retries
+    the original request once, and gives up if that fails. It never
+    retries more than once -- a refresh loop against a service that is
+    down is worse than a clean failure.
+
+  - proxy.ts. Every /admin/* page load in admin-ui passes through it
+    first. It only checks that the session cookie exists and decrypts --
+    it is a presence check, not an authorization check, and it cannot
+    tell whether the session belongs to an admin. auth-config decides
+    that on every single API call.
+
+  - Error paths, beyond the 403/409 branches shown in flow 4. Upstream
+    status codes and messages are passed through to the browser rather
+    than being flattened into a generic failure.
